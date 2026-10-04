@@ -1,83 +1,86 @@
-# Clinial Risk Assessment System
+# Clinical Risk Assessment System
 
-A deep learning-based infection risk prediction system, including two prediction models for SBE and SBP.
+Infection risk prediction for cirrhotic patients based on the **NAM-TabR**
+hybrid neural architecture.
+
+This repository contains the core code only: the model framework, the
+training scripts, and the web interfaces. 
+
+## Model Architecture
+
+NAM-TabR combines gated residual terms on a linear foundation:
+
+- **Linear baseline** — a global linear layer over all features plus a
+  dedicated linear pathway for the prespecified core features.
+- **NAM** — one small MLP per feature; zero-meaned per-feature outputs are
+  summed into additive, interpretable contributions.
+- **Core-feature interaction network** — a compact MLP over the core features.
+- **TabR (Siamese retrieval)** — dynamic pools of positive AND negative
+  training anchors; each sample is scored by core-weighted cosine similarity
+  to its nearest neighbours in each pool, and the positive-versus-negative
+  similarity difference becomes a bonus logit.
+- Each nonlinear component has its own learnable gate (α / β / γ), initialised
+  near zero so the model defaults to the interpretable linear prediction and
+  only activates nonlinear terms when they reduce the loss. During an initial
+  linear-warmup phase the nonlinear modules are frozen.
+- Training uses focal loss (label smoothing) + class-balanced sampling.
+
+`src/models/nam_tabr.py` implements the framework (`LRTabREnhanced`,
+`LRTabRModel`, `NAMTabRClassifier`).
 
 ## Project Structure
 
 ```
-├── app_gradio_sbe.py      # SBE Risk Assessment Web Interface
-├── app_gradio_sbp.py      # SBP Risk Assessment Web Interface
-├── train_sbe_model.py     # SBE Model Training Script
-├── train_sbp_model.py     # SBP Model Training Script
-├── src/                   # Source Code Directory
-│   ├── data/              # Data Loading Module
-│   └── models/            # Model Definition Module
-├── data/                  # Training Data Directory
-└── temp/                  # Models and Intermediate Results Directory
+├── app_gradio_sbp.py      # SBP risk-assessment web interface (port 7860)
+├── app_gradio_sbe.py      # SBE risk-assessment web interface (port 7861)
+├── train_sbp_model.py     # SBP training script
+├── train_sbe_model.py     # SBE training script
+├── src/
+│   ├── data/              # data loading
+│   └── models/            # NAM-TabR framework
 ```
 
 ## Requirements
 
-- Python 3.8+
-- PyTorch
-- Gradio
-- scikit-learn
-- pandas
-- numpy
-- matplotlib
-- joblib
-
-Install dependencies:
-```bash
-pip install torch gradio scikit-learn pandas numpy matplotlib joblib
-```
+Python 3.9+, then:
 
 ## Usage
 
-### 1. Model Training
+### 1. Prepare your data
 
-Train SBE model:
-```bash
-python train_sbe_model.py
+Place three CSV files per fluid in `data/sbp/` and `data/sbe/`:
+
+```
+data/<fluid>/train.csv
+data/<fluid>/internal_test.csv
+data/<fluid>/external_test.csv
 ```
 
-Train SBP model:
+To adapt the code to your own feature set, edit `FEATURES` / `CORE_FEATURES` / `LABEL_COL` at the
+top of the training scripts — nothing else is column-dependent.
+
+### 2. Train
+
 ```bash
-python train_sbp_model.py
+python train_sbp_model.py   # -> checkpoints/sbp/model.pt + outputs/sbp/
+python train_sbe_model.py   # -> checkpoints/sbe/model.pt + outputs/sbe/
 ```
 
-After training, model files are saved in the `temp/models/` directory.
+### 3. Launch the web interfaces
 
-### 2. Launch Prediction Interface
-
-Launch SBE risk assessment interface (port 7860):
 ```bash
-python app_gradio_sbe.py
+python app_gradio_sbp.py    # http://localhost:7860
+python app_gradio_sbe.py    # http://localhost:7861
 ```
-
-Launch SBP risk assessment interface (port 7860):
-```bash
-python app_gradio_sbp.py
-```
-
-After launching, visit `http://localhost:7860` to access the web interface.
-
-## Model Description
-
-### SBE Model
-- Input Features: PMN%, PMN, Ascitic fluid WBC, WBC, CRP
-- Core Features: PMN%, PMN
-
-### SBP Model
-- Input Features: PMN, Ascitic fluid WBC, Total cell count, Lymphocyte percentage
-- Core Features: PMN
 
 ## Output Description
 
-- Risk Level: HIGH RISK / LOW RISK
-- Feature Contribution Chart: Shows the contribution of each feature to the prediction result
+- Risk level: HIGH RISK / LOW RISK (Youden-J decision threshold from training)
+- Feature contribution chart: per-feature gated NAM contributions to the
+  log-odds
 
 ## Notes
 
-- Training data needs to be prepared in advance and placed in the `data/` directory
-- First-time use requires running the training scripts to generate model files
+- For research purposes only; not a medical device.
+- The web interfaces include a few illustrative example inputs for the
+  "Load a Case" button — replace them with examples from your own cohort.
