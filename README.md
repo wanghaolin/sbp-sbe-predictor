@@ -40,10 +40,6 @@ NAM-TabR combines gated residual terms on a linear foundation:
 │   └── models/            # NAM-TabR framework
 ```
 
-## Requirements
-
-Python 3.9+, then:
-
 ## Usage
 
 ### 1. Prepare your data
